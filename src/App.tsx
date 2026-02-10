@@ -92,6 +92,7 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
         }}
       >
         <button
+          className="primary"
           onClick={onDelete}
           style={{
             width: 96,

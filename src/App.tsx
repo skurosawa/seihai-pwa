@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { splitThoughts, generateAction } from "./model/thought";
 
 import {
@@ -17,21 +17,27 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const STORAGE_KEY = "seihai_v1_rawText";
+// 旧キー（rawText保存）→ 移行用
+const LEGACY_STORAGE_KEY = "seihai_v1_rawText";
+
+// 新キー（draft + items をJSON保存）
+const STORAGE_KEY = "seihai_v2_state";
 const SAVE_DEBOUNCE_MS = 300;
+
+type ThoughtItem = { id: string; text: string };
+
+function makeId() {
+  // SafariでもだいたいOK。古い環境ならフォールバック
+  // @ts-ignore
+  return (crypto?.randomUUID?.() ?? `id_${Date.now()}_${Math.random()}`).toString();
+}
 
 /* =========================
    Swipe-to-delete row
    - 左スワイプでDelete表示
    - さらに左へ一定距離で即削除
    ========================= */
-function SwipeRow({
-  text,
-  onDelete,
-}: {
-  text: string;
-  onDelete: () => void;
-}) {
+function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const startX = useRef<number | null>(null);
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -123,16 +129,17 @@ function SwipeRow({
    Sortable item (Drag handle)
    - 行スワイプと衝突しないように
      ドラッグはハンドル（☰）だけ
+   - dnd-kitのidは一意（重複テキスト対策）
    ========================= */
 function SortableItem({
-  id,
+  item,
   onDelete,
 }: {
-  id: string;
+  item: ThoughtItem;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+    useSortable({ id: item.id });
 
   return (
     <div
@@ -165,7 +172,7 @@ function SortableItem({
 
         {/* Swipe Row */}
         <div style={{ flex: 1 }}>
-          <SwipeRow text={id} onDelete={onDelete} />
+          <SwipeRow text={item.text} onDelete={onDelete} />
         </div>
       </div>
     </div>
@@ -173,18 +180,54 @@ function SortableItem({
 }
 
 export default function App() {
-  const [rawText, setRawText] = useState("");
-  const [thoughts, setThoughts] = useState<string[]>([]);
+  // ✅ 入力中（textarea）
+  const [draft, setDraft] = useState("");
+
+  // ✅ 思考リスト（id付き）
+  const [items, setItems] = useState<ThoughtItem[]>([]);
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // ✅ pager参照（追加後に整理ページへ移動）
+  const pagerRef = useRef<HTMLDivElement | null>(null);
+  const goToPage = (index: number) => {
+    const el = pagerRef.current;
+    if (!el) return;
+    const w = el.clientWidth; // 1ページ分の幅
+    el.scrollTo({ left: w * index, behavior: "smooth" });
+  };
 
   /* =========================
      起動時：localStorage復元
+     - v2(JSON)があればそれを優先
+     - なければ v1(rawText) から移行
      ========================= */
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved !== null) {
-        setRawText(saved);
-        setThoughts(splitThoughts(saved));
+      const savedV2 = localStorage.getItem(STORAGE_KEY);
+      if (savedV2) {
+        const parsed = JSON.parse(savedV2) as {
+          draft?: string;
+          items?: ThoughtItem[];
+        };
+        if (typeof parsed.draft === "string") setDraft(parsed.draft);
+        if (Array.isArray(parsed.items)) {
+          setItems(
+            parsed.items
+              .filter((x) => x && typeof x.id === "string" && typeof x.text === "string")
+              .map((x) => ({ id: x.id, text: x.text }))
+          );
+        }
+        return;
+      }
+
+      // v1 から移行
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy !== null) {
+        const texts = splitThoughts(legacy);
+        setItems(texts.map((t) => ({ id: makeId(), text: t })));
+        setDraft("");
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
     } catch {}
   }, []);
@@ -212,42 +255,64 @@ export default function App() {
   }, []);
 
   /* =========================
-     自動保存（rawTextのみ）
+     自動保存（draft + items）
      ========================= */
   useEffect(() => {
     const id = window.setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, rawText);
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            draft,
+            items,
+          })
+        );
       } catch {}
     }, SAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(id);
-  }, [rawText]);
+  }, [draft, items]);
 
   /* =========================
-     rawText → thoughts を同期
-     - 入力が変わったら整理結果も更新
-     - Arrangeで並び替え/削除したら rawText を逆反映して保持
-       （次の入力で上書きされるのを防ぐため）
+     textarea 自動リサイズ（最大4行）
      ========================= */
   useEffect(() => {
-    setThoughts(splitThoughts(rawText));
-  }, [rawText]);
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const maxHeight = 4 * 24; // lineHeight 24px想定
+    el.style.height = Math.min(el.scrollHeight, maxHeight) + "px";
+  }, [draft]);
 
+  const thoughts = useMemo(() => items.map((x) => x.text), [items]);
   const action = useMemo(() => generateAction(thoughts), [thoughts]);
 
   const clearAll = () => {
-    setRawText("");
-    setThoughts([]);
+    setDraft("");
+    setItems([]);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } catch {}
   };
 
-  // Arrange変更（削除/並び替え）→ rawTextへ反映（順序を保持して永続化するため）
-  const commitThoughts = (next: string[]) => {
-    setThoughts(next);
-    setRawText(next.join("\n"));
+  // ✅ 投稿：改行で分割して複数追加（空行は捨てる）→ 追加後に整理ページへ
+  const addThoughtsFromDraft = () => {
+    const v = draft.trim();
+    if (!v) return;
+
+    const parts = v
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) return;
+
+    setItems((prev) => [...prev, ...parts.map((t) => ({ id: makeId(), text: t }))]);
+    setDraft("");
+
+    // ✅ 整理ページへ移動
+    requestAnimationFrame(() => goToPage(1));
   };
 
   /* =========================
@@ -266,43 +331,53 @@ export default function App() {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = thoughts.indexOf(active.id);
-    const newIndex = thoughts.indexOf(over.id);
+    const oldIndex = items.findIndex((x) => x.id === active.id);
+    const newIndex = items.findIndex((x) => x.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const moved = arrayMove(thoughts, oldIndex, newIndex);
-    commitThoughts(moved);
+    setItems(arrayMove(items, oldIndex, newIndex));
   };
 
   const deleteItem = (id: string) => {
-    commitThoughts(thoughts.filter((t) => t !== id));
+    setItems((prev) => prev.filter((x) => x.id !== id));
   };
 
   return (
-    <div className="pager">
+    <div className="pager" ref={pagerRef}>
       {/* ========== InputView ========== */}
       <div className="page">
         <h2>入力</h2>
 
         <textarea
-          value={rawText}
-          onChange={(e) => setRawText(e.target.value)}
-          placeholder="思考を改行で区切って書くにゃ…"
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter = 投稿 / Shift+Enter = 改行
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              addThoughtsFromDraft();
+            }
+          }}
+          placeholder="Enterで追加 / Shift+Enterで改行（改行は分割して追加）"
+          rows={1}
           style={{
             width: "100%",
-            height: "65%",
             fontSize: "16px", // iOS拡大防止
-            lineHeight: 1.6,
+            lineHeight: "24px",
             boxSizing: "border-box",
-            paddingBottom: "80px",
+            resize: "none",
           }}
         />
 
         <div className="toolbar">
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={addThoughtsFromDraft} disabled={!draft.trim()}>
+              追加
+            </button>
             <button onClick={clearAll}>全消去</button>
             <span style={{ opacity: 0.7, fontSize: 12 }}>
-              ※入力は自動保存されるにゃ
+              ※入力・リストは自動保存されるにゃ
             </span>
           </div>
         </div>
@@ -312,7 +387,7 @@ export default function App() {
       <div className="page">
         <h2>整理</h2>
 
-        {thoughts.length === 0 ? (
+        {items.length === 0 ? (
           <p style={{ opacity: 0.7 }}>まだ思考がないにゃ</p>
         ) : (
           <DndContext
@@ -320,10 +395,17 @@ export default function App() {
             collisionDetection={closestCenter}
             onDragEnd={onDragEnd}
           >
-            <SortableContext items={thoughts} strategy={verticalListSortingStrategy}>
+            <SortableContext
+              items={items.map((x) => x.id)}
+              strategy={verticalListSortingStrategy}
+            >
               <div style={{ display: "grid", gap: 10 }}>
-                {thoughts.map((t) => (
-                  <SortableItem key={t} id={t} onDelete={() => deleteItem(t)} />
+                {items.map((it) => (
+                  <SortableItem
+                    key={it.id}
+                    item={it}
+                    onDelete={() => deleteItem(it.id)}
+                  />
                 ))}
               </div>
             </SortableContext>

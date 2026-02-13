@@ -255,10 +255,14 @@ export default function App() {
     alert("コピーしたにゃ");
   };
 
-  const sensors = useSensors(
-    useSensor(TouchSensor, { activationConstraint: { delay: 120 } }),
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
+const sensors = useSensors(
+  useSensor(TouchSensor, {
+    activationConstraint: { delay: 120, tolerance: 6 },
+  }),
+  useSensor(PointerSensor, {
+    activationConstraint: { distance: 6 },
+  })
+);
 
   const onDragEnd = (event: any) => {
     const { active, over } = event;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { splitThoughts, generateAction } from "./model/thought";
+import { generateAction } from "./model/thought";
 
 import {
   DndContext,
@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const LEGACY_STORAGE_KEY = "seihai_v1_rawText";
+// const LEGACY_STORAGE_KEY = "seihai_v1_rawText";
 const STORAGE_KEY = "seihai_v2_state";
 const SAVE_DEBOUNCE_MS = 300;
 

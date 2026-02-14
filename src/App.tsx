@@ -329,20 +329,26 @@ export default function App() {
       <header className="topnav">
         <div className="topnav__title">Seihai</div>
 
-        <div className="seg" role="tablist" aria-label="Seihai steps">
-          {(["入力", "整理", "行動"] as const).map((label, i) => (
-            <button
-              key={label}
-              type="button"
-              role="tab"
-              aria-selected={activeIndex === i}
-              className={`seg__btn ${activeIndex === i ? "is-active" : ""}`}
-              onClick={() => goToPage(i)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+<div
+  className="seg"
+  data-index={activeIndex}
+  role="tablist"
+  aria-label="Seihai steps"
+>
+    <div className="seg__pill" aria-hidden="true" />
+      {(["入力", "整理", "行動"] as const).map((label, i) => (
+        <button
+          key={label}
+          type="button"
+          role="tab"
+          aria-selected={activeIndex === i}
+          className="seg__btn"
+          onClick={() => goToPage(i)}
+        >
+         {label}
+      </button>
+      ))}
+    </div>
       </header>
 
       <div className="pager" ref={pagerRef}>
@@ -429,7 +435,7 @@ export default function App() {
                 position: "fixed",
                 left: 12,
                 right: 12,
-                bottom: 12,
+                bottom: "calc(12px + env(safe-area-inset-bottom))",
                 padding: "10px 12px",
                 borderRadius: 14,
                 background: "rgba(0,0,0,0.85)",

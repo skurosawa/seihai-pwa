@@ -232,9 +232,61 @@ button.danger {
   -webkit-tap-highlight-color: transparent;
 }
 
-.seg__btn.is-active{
+/* ===== iOS風 Segmented（ピルがスライド） ===== */
+.seg{
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.65);
+  overflow: hidden; /* ピルの角を綺麗に切る */
+}
+
+/* 白いピル（選択背景） */
+.seg__pill{
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+
+  /* 3分割 + gap を考慮 */
+  width: calc((100% - 12px - 12px) / 3); /* padding左右=12px, gap*2=12px */
+
+  border-radius: 10px;
   background: var(--card);
   box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  transition: transform 180ms ease;
+  transform: translateX(0);
+  pointer-events: none;
+}
+
+/* activeIndexに応じてピルを移動 */
+.seg[data-index="1"] .seg__pill{ transform: translateX(calc(100% + 6px)); }
+.seg[data-index="2"] .seg__pill{ transform: translateX(calc((100% + 6px) * 2)); }
+
+.seg__btn{
+  position: relative;
+  z-index: 1;
+
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: transparent;
+
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 選択中の文字だけ少し濃く（iOSっぽい） */
+.seg__btn[aria-selected="true"]{
+  color: var(--fg);
+}
+.seg__btn[aria-selected="false"]{
+  color: rgba(60, 60, 67, 0.7);
 }
 
 

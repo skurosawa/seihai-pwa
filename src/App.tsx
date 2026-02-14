@@ -143,7 +143,9 @@ function SortableItem({
 export default function App() {
   const [draft, setDraft] = useState("");
   const [items, setItems] = useState<ThoughtItem[]>([]);
+  const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
 
+  const undoTimerRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
 
@@ -163,14 +165,6 @@ export default function App() {
         const parsed = JSON.parse(saved);
         setDraft(parsed.draft ?? "");
         setItems(parsed.items ?? []);
-        return;
-      }
-
-      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacy) {
-        const texts = splitThoughts(legacy);
-        setItems(texts.map((t) => ({ id: makeId(), text: t })));
-        localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
     } catch {}
   }, []);
@@ -193,12 +187,38 @@ export default function App() {
     el.style.height = Math.min(el.scrollHeight, 4 * 24) + "px";
   }, [draft]);
 
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
+
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
   const action = useMemo(() => generateAction(thoughts), [thoughts]);
 
   /* =========================
      操作
      ========================= */
+
+  const showUndo = (payload: { item: ThoughtItem; index: number }) => {
+    setUndo(payload);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = window.setTimeout(() => setUndo(null), 5000);
+  };
+
+  const undoDelete = () => {
+    if (!undo) return;
+    const { item, index } = undo;
+
+    setItems((prev) => {
+      const next = [...prev];
+      next.splice(Math.min(index, next.length), 0, item);
+      return next;
+    });
+
+    setUndo(null);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+  };
 
   const addThoughtsFromDraft = () => {
     const v = draft.trim();
@@ -218,15 +238,11 @@ export default function App() {
     requestAnimationFrame(() => goToPage(1));
   };
 
-  const clearDraft = () => {
-    setDraft("");
-  };
+  const clearDraft = () => setDraft("");
 
   const resetAll = () => {
-    const ok = confirm(
-      "入力とリストをすべて消します。取り消し不可。続けるにゃ？"
-    );
-    if (!ok) return;
+    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？"))
+      return;
 
     setDraft("");
     setItems([]);
@@ -243,10 +259,7 @@ export default function App() {
 
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: "Seihai",
-          text,
-        });
+        await navigator.share({ title: "Seihai", text });
         return;
       }
     } catch {}
@@ -255,14 +268,14 @@ export default function App() {
     alert("コピーしたにゃ");
   };
 
-const sensors = useSensors(
-  useSensor(TouchSensor, {
-    activationConstraint: { delay: 120, tolerance: 6 },
-  }),
-  useSensor(PointerSensor, {
-    activationConstraint: { distance: 6 },
-  })
-);
+  const sensors = useSensors(
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 120, tolerance: 6 },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  );
 
   const onDragEnd = (event: any) => {
     const { active, over } = event;
@@ -330,16 +343,48 @@ const sensors = useSensors(
                   <SortableItem
                     key={it.id}
                     item={it}
-                    onDelete={() =>
-                      setItems((prev) =>
-                        prev.filter((x) => x.id !== it.id)
-                      )
-                    }
+                    onDelete={() => {
+                      setItems((prev) => {
+                        const index = prev.findIndex((x) => x.id === it.id);
+                        if (index < 0) return prev;
+
+                        const next = [...prev];
+                        const [removed] = next.splice(index, 1);
+                        if (removed) showUndo({ item: removed, index });
+
+                        return next;
+                      });
+                    }}
                   />
                 ))}
               </div>
             </SortableContext>
           </DndContext>
+        )}
+
+        {undo && (
+          <div
+            style={{
+              position: "fixed",
+              left: 12,
+              right: 12,
+              bottom: 12,
+              padding: "10px 12px",
+              borderRadius: 14,
+              background: "rgba(0,0,0,0.85)",
+              color: "white",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              zIndex: 9999,
+            }}
+          >
+            <span style={{ fontSize: 14 }}>削除したにゃ</span>
+            <button className="primary" onClick={undoDelete}>
+              取り消す
+            </button>
+          </div>
         )}
       </div>
 

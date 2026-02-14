@@ -3,6 +3,7 @@ import { generateAction } from "./model/thought";
 
 import {
   DndContext,
+  type DragEndEvent,
   PointerSensor,
   TouchSensor,
   closestCenter,
@@ -24,8 +25,35 @@ const SAVE_DEBOUNCE_MS = 300;
 type ThoughtItem = { id: string; text: string };
 
 function makeId() {
-  // @ts-ignore
-  return (crypto?.randomUUID?.() ?? `id_${Date.now()}_${Math.random()}`).toString();
+  const randomId = globalThis.crypto?.randomUUID?.();
+  return (randomId ?? `id_${Date.now()}_${Math.random()}`).toString();
+}
+
+function loadInitialState(): { draft: string; items: ThoughtItem[] } {
+  if (typeof window === "undefined") return { draft: "", items: [] };
+
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (!saved) return { draft: "", items: [] };
+
+    const parsed = JSON.parse(saved) as Partial<{ draft: unknown; items: unknown }>;
+    const draft = typeof parsed.draft === "string" ? parsed.draft : "";
+    const items = Array.isArray(parsed.items)
+      ? parsed.items.filter(
+          (item): item is ThoughtItem =>
+            typeof item === "object" &&
+            item !== null &&
+            "id" in item &&
+            "text" in item &&
+            typeof (item as any).id === "string" &&
+            typeof (item as any).text === "string"
+        )
+      : [];
+
+    return { draft, items };
+  } catch {
+    return { draft: "", items: [] };
+  }
 }
 
 /* =========================
@@ -141,9 +169,12 @@ function SortableItem({
 }
 
 export default function App() {
-  const [draft, setDraft] = useState("");
-  const [items, setItems] = useState<ThoughtItem[]>([]);
-  const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
+  const [initialState] = useState(loadInitialState);
+  const [draft, setDraft] = useState(initialState.draft);
+  const [items, setItems] = useState<ThoughtItem[]>(initialState.items);
+  const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(
+    null
+  );
 
   // 追加：上部セグメントの現在位置（スワイプ追従）
   const [activeIndex, setActiveIndex] = useState(0);
@@ -157,20 +188,6 @@ export default function App() {
     if (!el) return;
     el.scrollTo({ left: el.clientWidth * index, behavior: "smooth" });
   };
-
-  /* =========================
-     初期化
-     ========================= */
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setDraft(parsed.draft ?? "");
-        setItems(parsed.items ?? []);
-      }
-    } catch {}
-  }, []);
 
   useEffect(() => {
     const id = setTimeout(() => {
@@ -207,7 +224,7 @@ export default function App() {
 
     el.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => el.removeEventListener("scroll", onScroll as any);
+    return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
@@ -246,7 +263,10 @@ export default function App() {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    setItems((prev) => [...prev, ...parts.map((t) => ({ id: makeId(), text: t }))]);
+    setItems((prev) => [
+      ...prev,
+      ...parts.map((t) => ({ id: makeId(), text: t })),
+    ]);
 
     setDraft("");
     requestAnimationFrame(() => goToPage(1));
@@ -255,7 +275,8 @@ export default function App() {
   const clearDraft = () => setDraft("");
 
   const resetAll = () => {
-    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？")) return;
+    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？"))
+      return;
 
     setDraft("");
     setItems([]);
@@ -265,7 +286,9 @@ export default function App() {
   const onShare = async () => {
     const text = [
       action ? `## 行動\n${action}\n` : "",
-      thoughts.length ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}` : "",
+      thoughts.length
+        ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}`
+        : "",
     ].join("\n");
 
     try {
@@ -273,7 +296,9 @@ export default function App() {
         await navigator.share({ title: "Seihai", text });
         return;
       }
-    } catch {}
+    } catch {
+      // Fallback to clipboard share below.
+    }
 
     await navigator.clipboard.writeText(text);
     alert("コピーしたにゃ");
@@ -288,7 +313,7 @@ export default function App() {
     })
   );
 
-  const onDragEnd = (event: any) => {
+  const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -340,7 +365,11 @@ export default function App() {
           />
 
           <div className="toolbar" style={{ display: "flex", gap: 8 }}>
-            <button className="primary" onClick={addThoughtsFromDraft} disabled={!draft.trim()}>
+            <button
+              className="primary"
+              onClick={addThoughtsFromDraft}
+              disabled={!draft.trim()}
+            >
               追加
             </button>
 
@@ -361,8 +390,15 @@ export default function App() {
           {items.length === 0 ? (
             <p style={{ opacity: 0.6 }}>まだ思考がないにゃ</p>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDragEnd}
+            >
+              <SortableContext
+                items={items.map((x) => x.id)}
+                strategy={verticalListSortingStrategy}
+              >
                 <div style={{ display: "grid", gap: 10 }}>
                   {items.map((it) => (
                     <SortableItem

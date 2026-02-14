@@ -145,6 +145,9 @@ export default function App() {
   const [items, setItems] = useState<ThoughtItem[]>([]);
   const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
 
+  // 追加：上部セグメントの現在位置（スワイプ追従）
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const undoTimerRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
@@ -171,10 +174,7 @@ export default function App() {
 
   useEffect(() => {
     const id = setTimeout(() => {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ draft, items })
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ draft, items }));
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(id);
@@ -191,6 +191,23 @@ export default function App() {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
+  }, []);
+
+  // 追加：スワイプでページが動いたらセグメントを追従
+  useEffect(() => {
+    const el = pagerRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const w = el.clientWidth || 1;
+      const idx = Math.round(el.scrollLeft / w);
+      const clamped = Math.max(0, Math.min(2, idx));
+      setActiveIndex(clamped);
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener("scroll", onScroll as any);
   }, []);
 
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
@@ -229,10 +246,7 @@ export default function App() {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    setItems((prev) => [
-      ...prev,
-      ...parts.map((t) => ({ id: makeId(), text: t })),
-    ]);
+    setItems((prev) => [...prev, ...parts.map((t) => ({ id: makeId(), text: t }))]);
 
     setDraft("");
     requestAnimationFrame(() => goToPage(1));
@@ -241,8 +255,7 @@ export default function App() {
   const clearDraft = () => setDraft("");
 
   const resetAll = () => {
-    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？"))
-      return;
+    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？")) return;
 
     setDraft("");
     setItems([]);
@@ -252,9 +265,7 @@ export default function App() {
   const onShare = async () => {
     const text = [
       action ? `## 行動\n${action}\n` : "",
-      thoughts.length
-        ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}`
-        : "",
+      thoughts.length ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}` : "",
     ].join("\n");
 
     try {
@@ -288,124 +299,139 @@ export default function App() {
   };
 
   return (
-    <div className="pager" ref={pagerRef}>
-      {/* ================= Input ================= */}
-      <div className="page">
-        <h2>入力</h2>
+    <>
+      {/* ======= iOS風 上部ナビ（セグメント） ======= */}
+      <header className="topnav">
+        <div className="topnav__title">Seihai</div>
 
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          rows={1}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              addThoughtsFromDraft();
-            }
-          }}
-          placeholder="Enterで追加 / Shift+Enterで改行"
-        />
-
-        <div className="toolbar" style={{ display: "flex", gap: 8 }}>
-          <button className="primary" onClick={addThoughtsFromDraft} disabled={!draft.trim()}>
-            追加
-          </button>
-
-          <button onClick={clearDraft} disabled={!draft.trim()}>
-            入力をクリア
-          </button>
-
-          <button className="danger" onClick={resetAll}>
-            リセット
-          </button>
-        </div>
-      </div>
-
-      {/* ================= Arrange ================= */}
-      <div className="page">
-        <h2>整理</h2>
-
-        {items.length === 0 ? (
-          <p style={{ opacity: 0.6 }}>まだ思考がないにゃ</p>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={onDragEnd}
-          >
-            <SortableContext
-              items={items.map((x) => x.id)}
-              strategy={verticalListSortingStrategy}
+        <div className="seg" role="tablist" aria-label="Seihai steps">
+          {(["入力", "整理", "行動"] as const).map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              role="tab"
+              aria-selected={activeIndex === i}
+              className={`seg__btn ${activeIndex === i ? "is-active" : ""}`}
+              onClick={() => goToPage(i)}
             >
-              <div style={{ display: "grid", gap: 10 }}>
-                {items.map((it) => (
-                  <SortableItem
-                    key={it.id}
-                    item={it}
-                    onDelete={() => {
-                      setItems((prev) => {
-                        const index = prev.findIndex((x) => x.id === it.id);
-                        if (index < 0) return prev;
+              {label}
+            </button>
+          ))}
+        </div>
+      </header>
 
-                        const next = [...prev];
-                        const [removed] = next.splice(index, 1);
-                        if (removed) showUndo({ item: removed, index });
+      <div className="pager" ref={pagerRef}>
+        {/* ================= Input ================= */}
+        <div className="page">
+          <h2>入力</h2>
 
-                        return next;
-                      });
-                    }}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
-
-        {undo && (
-          <div
-            style={{
-              position: "fixed",
-              left: 12,
-              right: 12,
-              bottom: 12,
-              padding: "10px 12px",
-              borderRadius: 14,
-              background: "rgba(0,0,0,0.85)",
-              color: "white",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-              zIndex: 9999,
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            rows={1}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                addThoughtsFromDraft();
+              }
             }}
-          >
-            <span style={{ fontSize: 14 }}>削除したにゃ</span>
-            <button className="primary" onClick={undoDelete}>
-              取り消す
+            placeholder="Enterで追加 / Shift+Enterで改行"
+          />
+
+          <div className="toolbar" style={{ display: "flex", gap: 8 }}>
+            <button className="primary" onClick={addThoughtsFromDraft} disabled={!draft.trim()}>
+              追加
+            </button>
+
+            <button onClick={clearDraft} disabled={!draft.trim()}>
+              入力をクリア
+            </button>
+
+            <button className="danger" onClick={resetAll}>
+              リセット
             </button>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* ================= Action ================= */}
-      <div className="page">
-        <h2>行動</h2>
+        {/* ================= Arrange ================= */}
+        <div className="page">
+          <h2>整理</h2>
 
-        {action ? (
-          <>
-            <p>{action}</p>
+          {items.length === 0 ? (
+            <p style={{ opacity: 0.6 }}>まだ思考がないにゃ</p>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {items.map((it) => (
+                    <SortableItem
+                      key={it.id}
+                      item={it}
+                      onDelete={() => {
+                        setItems((prev) => {
+                          const index = prev.findIndex((x) => x.id === it.id);
+                          if (index < 0) return prev;
 
-            <div className="toolbar">
-              <button className="primary" onClick={onShare}>
-                共有
+                          const next = [...prev];
+                          const [removed] = next.splice(index, 1);
+                          if (removed) showUndo({ item: removed, index });
+
+                          return next;
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          {undo && (
+            <div
+              style={{
+                position: "fixed",
+                left: 12,
+                right: 12,
+                bottom: 12,
+                padding: "10px 12px",
+                borderRadius: 14,
+                background: "rgba(0,0,0,0.85)",
+                color: "white",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                zIndex: 9999,
+              }}
+            >
+              <span style={{ fontSize: 14 }}>削除したにゃ</span>
+              <button className="primary" onClick={undoDelete}>
+                取り消す
               </button>
             </div>
-          </>
-        ) : (
-          <p style={{ opacity: 0.6 }}>まだないにゃ</p>
-        )}
+          )}
+        </div>
+
+        {/* ================= Action ================= */}
+        <div className="page">
+          <h2>行動</h2>
+
+          {action ? (
+            <>
+              <p>{action}</p>
+
+              <div className="toolbar">
+                <button className="primary" onClick={onShare}>
+                  共有
+                </button>
+              </div>
+            </>
+          ) : (
+            <p style={{ opacity: 0.6 }}>まだないにゃ</p>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

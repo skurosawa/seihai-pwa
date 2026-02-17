@@ -57,15 +57,22 @@ function loadInitialState(): { draft: string; items: ThoughtItem[] } {
 }
 
 /* =========================
-   Swipe Row
+   Swipe Row (iOS-like: no instant delete)
    ========================= */
 function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const startX = useRef<number | null>(null);
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
 
+  const ACTION_W = 96;             // Delete領域の幅
+  const OPEN_AT = 28;              // これ以上左に動いたら“開く”
+  const MAX_LEFT = ACTION_W + 24;  // 引っ張りすぎ防止
+
   const clamp = (v: number, min: number, max: number) =>
     Math.min(max, Math.max(min, v));
+
+  const close = () => setDx(0);
+  const open = () => setDx(-ACTION_W);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -77,21 +84,20 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging || startX.current == null) return;
     const delta = e.clientX - startX.current;
-    setDx(clamp(delta, -120, 0));
+    setDx(clamp(delta, -MAX_LEFT, 0));
   };
 
   const onPointerUp = () => {
     setDragging(false);
-    if (dx < -90) {
-      onDelete();
-      setDx(0);
-      return;
-    }
-    setDx(dx < -40 ? -96 : 0);
+
+    // iOSっぽく：開く or 閉じる の2択でスナップ（即削除はしない）
+    if (dx <= -OPEN_AT) open();
+    else close();
   };
 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius: 12 }}>
+      {/* 背景（アクション領域） */}
       <div
         style={{
           position: "absolute",
@@ -100,11 +106,19 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
           justifyContent: "flex-end",
         }}
       >
-        <button className="danger" onClick={onDelete} style={{ width: 96 }}>
+        <button
+          className="danger"
+          onClick={() => {
+            onDelete();
+            close();
+          }}
+          style={{ width: ACTION_W, borderRadius: 0 }}
+        >
           Delete
         </button>
       </div>
 
+      {/* 前景（スワイプする行） */}
       <div
         style={{
           transform: `translateX(${dx}px)`,
@@ -118,6 +132,10 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        // 開いてる時、タップしたら閉じる（iOSっぽい）
+        onClick={() => {
+          if (!dragging && dx !== 0) close();
+        }}
       >
         {text}
       </div>
@@ -147,6 +165,7 @@ function SortableItem({
       }}
     >
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {/* iOSっぽい：ハンドル長押しでドラッグ開始（ここが掴みどころ） */}
         <span
           {...attributes}
           {...listeners}
@@ -156,7 +175,14 @@ function SortableItem({
             background: "white",
             cursor: "grab",
             fontWeight: 800,
+
+            // ここが重要：スクロール/スワイプ競合を減らす
+            touchAction: "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
           }}
+          aria-label="Reorder"
+          role="button"
         >
           ☰
         </span>
@@ -172,11 +198,9 @@ export default function App() {
   const [initialState] = useState(loadInitialState);
   const [draft, setDraft] = useState(initialState.draft);
   const [items, setItems] = useState<ThoughtItem[]>(initialState.items);
-  const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(
-    null
-  );
+  const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
 
-  // 追加：上部セグメントの現在位置（スワイプ追従）
+  // 上部セグメントの現在位置（スワイプ追従）
   const [activeIndex, setActiveIndex] = useState(0);
 
   const undoTimerRef = useRef<number | null>(null);
@@ -210,7 +234,7 @@ export default function App() {
     };
   }, []);
 
-  // 追加：スワイプでページが動いたらセグメントを追従
+  // スワイプでページが動いたらセグメントを追従
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -263,10 +287,7 @@ export default function App() {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    setItems((prev) => [
-      ...prev,
-      ...parts.map((t) => ({ id: makeId(), text: t })),
-    ]);
+    setItems((prev) => [...prev, ...parts.map((t) => ({ id: makeId(), text: t }))]);
 
     setDraft("");
     requestAnimationFrame(() => goToPage(1));
@@ -275,8 +296,7 @@ export default function App() {
   const clearDraft = () => setDraft("");
 
   const resetAll = () => {
-    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？"))
-      return;
+    if (!confirm("入力とリストをすべて消します。取り消し不可。続けるにゃ？")) return;
 
     setDraft("");
     setItems([]);
@@ -286,9 +306,7 @@ export default function App() {
   const onShare = async () => {
     const text = [
       action ? `## 行動\n${action}\n` : "",
-      thoughts.length
-        ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}`
-        : "",
+      thoughts.length ? `## 整理\n${thoughts.map((t) => `- ${t}`).join("\n")}` : "",
     ].join("\n");
 
     try {
@@ -304,12 +322,21 @@ export default function App() {
     alert("コピーしたにゃ");
   };
 
+  /* =========================
+     iOSっぽい並び替え設定
+     =========================
+     - ハンドル長押しでドラッグ開始（誤爆しづらい）
+     - 少しだけ動いてもスクロール判定になりにくい
+  */
   const sensors = useSensors(
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 120, tolerance: 6 },
+      activationConstraint: {
+        delay: 180,     // iOSっぽい“長押し開始”
+        tolerance: 8,   // 指のブレは許容（開始しやすく）
+      },
     }),
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: { distance: 4 }, // マウスは軽めに
     })
   );
 
@@ -325,30 +352,25 @@ export default function App() {
 
   return (
     <>
-      {/* ======= iOS風 上部ナビ（セグメント） ======= */}
+      {/* ======= 上部ナビ（セグメント） ======= */}
       <header className="topnav">
         <div className="topnav__title">Seihai</div>
 
-<div
-  className="seg"
-  data-index={activeIndex}
-  role="tablist"
-  aria-label="Seihai steps"
->
-    <div className="seg__pill" aria-hidden="true" />
-      {(["入力", "整理", "行動"] as const).map((label, i) => (
-        <button
-          key={label}
-          type="button"
-          role="tab"
-          aria-selected={activeIndex === i}
-          className="seg__btn"
-          onClick={() => goToPage(i)}
-        >
-         {label}
-      </button>
-      ))}
-    </div>
+        <div className="seg" data-index={activeIndex} role="tablist" aria-label="Seihai steps">
+          <div className="seg__pill" aria-hidden="true" />
+          {(["入力", "整理", "行動"] as const).map((label, i) => (
+            <button
+              key={label}
+              type="button"
+              role="tab"
+              aria-selected={activeIndex === i}
+              className="seg__btn"
+              onClick={() => goToPage(i)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <div className="pager" ref={pagerRef}>
@@ -371,11 +393,7 @@ export default function App() {
           />
 
           <div className="toolbar" style={{ display: "flex", gap: 8 }}>
-            <button
-              className="primary"
-              onClick={addThoughtsFromDraft}
-              disabled={!draft.trim()}
-            >
+            <button className="primary" onClick={addThoughtsFromDraft} disabled={!draft.trim()}>
               追加
             </button>
 
@@ -396,15 +414,8 @@ export default function App() {
           {items.length === 0 ? (
             <p style={{ opacity: 0.6 }}>まだ思考がないにゃ</p>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={onDragEnd}
-            >
-              <SortableContext
-                items={items.map((x) => x.id)}
-                strategy={verticalListSortingStrategy}
-              >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy}>
                 <div style={{ display: "grid", gap: 10 }}>
                   {items.map((it) => (
                     <SortableItem

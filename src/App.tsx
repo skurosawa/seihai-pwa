@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// const LEGACY_STORAGE_KEY = "seihai_v1_rawText";
 const STORAGE_KEY = "seihai_v2_state";
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -57,40 +56,81 @@ function loadInitialState(): { draft: string; items: ThoughtItem[] } {
 }
 
 /* =========================
-   Swipe Row (iOS-like: no instant delete)
+   Swipe Row (iOS-like)
+   - No instant delete
+   - Swipe reveals Delete, tap to confirm
+   - IMPORTANT: Only captures pointer AFTER horizontal intent is detected
+     so long-press reorder can still work on the whole row.
    ========================= */
 function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
-  const startX = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
+  const [swiping, setSwiping] = useState(false);
 
   const ACTION_W = 96;             // Delete領域の幅
-  const OPEN_AT = 28;              // これ以上左に動いたら“開く”
+  const OPEN_AT = 28;              // これ以上左なら開く
   const MAX_LEFT = ACTION_W + 24;  // 引っ張りすぎ防止
+  const INTENT = 10;               // 横スワイプ意図判定（px）
 
   const clamp = (v: number, min: number, max: number) =>
     Math.min(max, Math.max(min, v));
 
-  const close = () => setDx(0);
-  const open = () => setDx(-ACTION_W);
+  const close = () => {
+    setSwiping(false);
+    setDx(0);
+    start.current = null;
+  };
+  const open = () => {
+    setSwiping(false);
+    setDx(-ACTION_W);
+    start.current = null;
+  };
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    startX.current = e.clientX;
-    setDragging(true);
+    // ここでは capture しない（長押し並び替えを邪魔しない）
+    start.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!dragging || startX.current == null) return;
-    const delta = e.clientX - startX.current;
-    setDx(clamp(delta, -MAX_LEFT, 0));
+    if (!start.current) return;
+
+    const { x, y } = start.current;
+    const deltaX = e.clientX - x;
+    const deltaY = e.clientY - y;
+
+    // まだswipeモードじゃないなら、横スワイプ意図を判定
+    if (!swiping) {
+      const ax = Math.abs(deltaX);
+      const ay = Math.abs(deltaY);
+
+      // 横が明確に勝ったら swipe として扱う
+      if (ax >= INTENT && ax > ay) {
+        setSwiping(true);
+        // swipe開始時点で pointer capture（ここからは削除スワイプが勝つ）
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        // swipe計算は左方向だけ
+        setDx(clamp(deltaX, -MAX_LEFT, 0));
+      } else {
+        // 並び替え（長押し） or スクロールに任せる
+        return;
+      }
+    } else {
+      // swipe中：横移動でdx更新
+      setDx(clamp(deltaX, -MAX_LEFT, 0));
+    }
   };
 
   const onPointerUp = () => {
-    setDragging(false);
+    if (!start.current) return;
 
-    // iOSっぽく：開く or 閉じる の2択でスナップ（即削除はしない）
+    // swipeしてないなら何もしない（並び替え/タップに任せる）
+    if (!swiping) {
+      start.current = null;
+      return;
+    }
+
+    // iOSっぽく：開く or 閉じる の2択
     if (dx <= -OPEN_AT) open();
     else close();
   };
@@ -122,7 +162,7 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
       <div
         style={{
           transform: `translateX(${dx}px)`,
-          transition: dragging ? "none" : "transform 180ms ease",
+          transition: swiping ? "none" : "transform 180ms ease",
           padding: "14px 12px",
           background: "white",
           touchAction: "pan-y",
@@ -132,9 +172,9 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        // 開いてる時、タップしたら閉じる（iOSっぽい）
+        // 開いてる時にタップで閉じる（iOSっぽい）
         onClick={() => {
-          if (!dragging && dx !== 0) close();
+          if (!swiping && dx !== 0) close();
         }}
       >
         {text}
@@ -144,7 +184,8 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
 }
 
 /* =========================
-   Sortable Item
+   Sortable Item (Whole-row long press reorder)
+   - listeners/attributes are applied to the whole row wrapper
    ========================= */
 function SortableItem({
   item,
@@ -164,28 +205,33 @@ function SortableItem({
         transition,
       }}
     >
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {/* iOSっぽい：ハンドル長押しでドラッグ開始（ここが掴みどころ） */}
+      {/* 行全体で長押し→並び替え（iOS寄り） */}
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          touchAction: "pan-y",
+          userSelect: "none",
+        }}
+        aria-label="Reorder item"
+      >
+        {/* ハンドルは“見た目”として残す（行全体でドラッグできる） */}
         <span
-          {...attributes}
-          {...listeners}
           style={{
             padding: "10px",
             borderRadius: 10,
             background: "white",
-            cursor: "grab",
             fontWeight: 800,
-
-            // ここが重要：スクロール/スワイプ競合を減らす
-            touchAction: "none",
-            userSelect: "none",
-            WebkitUserSelect: "none",
+            opacity: 0.85,
           }}
-          aria-label="Reorder"
-          role="button"
+          aria-hidden="true"
         >
           ☰
         </span>
+
         <div style={{ flex: 1 }}>
           <SwipeRow text={item.text} onDelete={onDelete} />
         </div>
@@ -200,7 +246,6 @@ export default function App() {
   const [items, setItems] = useState<ThoughtItem[]>(initialState.items);
   const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
 
-  // 上部セグメントの現在位置（スワイプ追従）
   const [activeIndex, setActiveIndex] = useState(0);
 
   const undoTimerRef = useRef<number | null>(null);
@@ -234,7 +279,6 @@ export default function App() {
     };
   }, []);
 
-  // スワイプでページが動いたらセグメントを追従
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -242,8 +286,7 @@ export default function App() {
     const onScroll = () => {
       const w = el.clientWidth || 1;
       const idx = Math.round(el.scrollLeft / w);
-      const clamped = Math.max(0, Math.min(2, idx));
-      setActiveIndex(clamped);
+      setActiveIndex(Math.max(0, Math.min(2, idx)));
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -253,10 +296,6 @@ export default function App() {
 
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
   const action = useMemo(() => generateAction(thoughts), [thoughts]);
-
-  /* =========================
-     操作
-     ========================= */
 
   const showUndo = (payload: { item: ThoughtItem; index: number }) => {
     setUndo(payload);
@@ -322,21 +361,19 @@ export default function App() {
     alert("コピーしたにゃ");
   };
 
-  /* =========================
-     iOSっぽい並び替え設定
-     =========================
-     - ハンドル長押しでドラッグ開始（誤爆しづらい）
-     - 少しだけ動いてもスクロール判定になりにくい
+  /* iOS純正寄せ：
+     - 行全体で「長押し→ドラッグ」できるよう delay を入れる
+     - 横スワイプ（削除）は SwipeRow が横意図を掴んだ時点で勝つ
   */
   const sensors = useSensors(
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 180,     // iOSっぽい“長押し開始”
-        tolerance: 8,   // 指のブレは許容（開始しやすく）
+        delay: 220,
+        tolerance: 8,
       },
     }),
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 4 }, // マウスは軽めに
+      activationConstraint: { distance: 4 },
     })
   );
 
@@ -352,7 +389,6 @@ export default function App() {
 
   return (
     <>
-      {/* ======= 上部ナビ（セグメント） ======= */}
       <header className="topnav">
         <div className="topnav__title">Seihai</div>
 

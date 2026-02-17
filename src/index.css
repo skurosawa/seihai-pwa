@@ -7,20 +7,21 @@ html, body, #root {
 }
 
 :root {
-  /* iOSっぽい配色（Light） */
-  --bg: #f2f2f7;          /* grouped background */
-  --card: #ffffff;        /* card */
-  --fg: #111111;          /* label */
-  --muted: rgba(60, 60, 67, 0.6);   /* secondary label */
-  --border: rgba(60, 60, 67, 0.18); /* separator */
+  /* iOS感を残しつつ、アイコン寄りの淡いブルー */
+  --bg: #eef5fa;                 /* 青みのある grouped background */
+  --card: #ffffff;               /* card */
+  --fg: #0f1720;                 /* main label */
+  --muted: rgba(45, 86, 110, 0.60);
+  --border: rgba(45, 86, 110, 0.18);
 
-  --blue: #0a84ff;        /* iOS blue */
-  --red: #ff3b30;         /* iOS red */
+  --blue: #6ea6c5;               /* アクセント */
+  --blue-strong: #4c8fb8;        /* 押下時 */
+  --red: #ff3b30;
 
   --radius: 14px;
-  --shadow: 0 8px 24px rgba(0,0,0,0.06);
+  --shadow: 0 8px 24px rgba(22, 62, 84, 0.08);
 
-  --tap: rgba(0,0,0,0.06);
+  --tap: rgba(22, 62, 84, 0.06);
 }
 
 html {
@@ -36,7 +37,6 @@ body {
   color: var(--fg);
 }
 
-/* フォーム要素のフォントを統一 */
 input, textarea, button {
   font-family: inherit;
 }
@@ -70,7 +70,6 @@ input, textarea, button {
   padding-bottom: calc(16px + env(safe-area-inset-bottom) + var(--kb, 0px));
 }
 
-/* 見出しをiOSっぽく控えめに */
 .page h2 {
   margin: 4px 0 12px;
   font-size: 20px;
@@ -79,13 +78,11 @@ input, textarea, button {
 }
 
 /* =========================
-   iOS-like Controls
+   Inputs
    ========================= */
-
-/* 入力欄（カード） */
 textarea, input {
   width: 100%;
-  font-size: 16px; /* iOSズーム防止 */
+  font-size: 16px;
   box-sizing: border-box;
 
   background: var(--card);
@@ -94,28 +91,24 @@ textarea, input {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 
-  padding: 12px 12px;
+  padding: 12px;
   outline: none;
 
   box-shadow: 0 1px 0 rgba(0,0,0,0.02);
 }
 
-textarea {
-  -webkit-text-size-adjust: 100%;
-}
-
-/* フォーカス時はiOSっぽく青いリング */
 textarea:focus, input:focus {
-  border-color: rgba(10, 132, 255, 0.55);
-  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.18);
+  border-color: rgba(110, 166, 197, 0.70);
+  box-shadow: 0 0 0 4px rgba(110, 166, 197, 0.20);
 }
 
-/* プレースホルダ */
 textarea::placeholder, input::placeholder {
   color: var(--muted);
 }
 
-/* ボタン（iOSっぽいpill） */
+/* =========================
+   Buttons
+   ========================= */
 button {
   appearance: none;
   -webkit-appearance: none;
@@ -130,6 +123,7 @@ button {
 
   transition: transform 0.04s ease, background 0.15s ease;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:active {
@@ -141,15 +135,14 @@ button:disabled {
   opacity: 0.45;
 }
 
-/* 追加ボタンをprimaryっぽくしたい場合はクラスを付ける */
 button.primary {
   background: var(--blue);
-  border-color: rgba(10, 132, 255, 0.35);
+  border-color: rgba(110, 166, 197, 0.45);
   color: white;
 }
 
 button.primary:active {
-  background: rgba(10, 132, 255, 0.88);
+  background: var(--blue-strong);
 }
 
 button.danger {
@@ -159,7 +152,7 @@ button.danger {
 }
 
 /* =========================
-   Toolbar (Sticky, iOS blur)
+   Toolbar
    ========================= */
 .toolbar {
   position: sticky;
@@ -167,8 +160,7 @@ button.danger {
 
   padding: 12px 0;
 
-  /* 半透明 + ぼかしでiOS感 */
-  background: rgba(242, 242, 247, 0.78);
+  background: rgba(238, 245, 250, 0.78);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 
@@ -176,30 +168,14 @@ button.danger {
 }
 
 /* =========================
-   Arrange cards
+   Top Navigation
    ========================= */
-/* SwipeRow / Drag handle の inline style で white 固定されてるので、
-   それを崩さずに“周り”を整える方向にする */
-.page p {
-  color: var(--muted);
-}
-
-/* =========================
-   Optional: reduce motion
-   ========================= */
-@media (prefers-reduced-motion: reduce) {
-  button {
-    transition: none;
-  }
-}
-
-/* ===== iOS風 Top Nav + Segmented ===== */
 .topnav{
   position: sticky;
   top: 0;
   z-index: 50;
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-  background: rgba(242,242,247,0.78);
+  background: rgba(238, 245, 250, 0.78);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
@@ -212,27 +188,9 @@ button.danger {
   margin-bottom: 10px;
 }
 
-.seg{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(255,255,255,0.65);
-}
-
-.seg__btn{
-  border: 0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: transparent;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* ===== iOS風 Segmented（ピルがスライド） ===== */
+/* =========================
+   Segmented (Sliding Pill)
+   ========================= */
 .seg{
   position: relative;
   display: grid;
@@ -242,51 +200,62 @@ button.danger {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255,255,255,0.65);
-  overflow: hidden; /* ピルの角を綺麗に切る */
+  overflow: hidden;
 }
 
-/* 白いピル（選択背景） */
 .seg__pill{
   position: absolute;
   top: 6px;
   bottom: 6px;
   left: 6px;
-
-  /* 3分割 + gap を考慮 */
-  width: calc((100% - 12px - 12px) / 3); /* padding左右=12px, gap*2=12px */
-
+  width: calc((100% - 24px) / 3);
   border-radius: 10px;
   background: var(--card);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 16px rgba(22, 62, 84, 0.08);
   transition: transform 180ms ease;
   transform: translateX(0);
   pointer-events: none;
 }
 
-/* activeIndexに応じてピルを移動 */
-.seg[data-index="1"] .seg__pill{ transform: translateX(calc(100% + 6px)); }
-.seg[data-index="2"] .seg__pill{ transform: translateX(calc((100% + 6px) * 2)); }
+.seg[data-index="1"] .seg__pill{
+  transform: translateX(calc(100% + 6px));
+}
+
+.seg[data-index="2"] .seg__pill{
+  transform: translateX(calc((100% + 6px) * 2));
+}
 
 .seg__btn{
   position: relative;
   z-index: 1;
-
   border: 0;
   border-radius: 10px;
   padding: 8px 10px;
   background: transparent;
-
   font-weight: 800;
   letter-spacing: -0.01em;
-  -webkit-tap-highlight-color: transparent;
 }
 
-/* 選択中の文字だけ少し濃く（iOSっぽい） */
+.seg__btn[aria-selected="false"]{
+  color: rgba(45, 86, 110, 0.7);
+}
+
 .seg__btn[aria-selected="true"]{
   color: var(--fg);
 }
-.seg__btn[aria-selected="false"]{
-  color: rgba(60, 60, 67, 0.7);
+
+/* =========================
+   Misc
+   ========================= */
+.page p {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .seg__pill {
+    transition: none;
+  }
 }
 
 

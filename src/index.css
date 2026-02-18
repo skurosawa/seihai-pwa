@@ -59,6 +59,9 @@ input, textarea, button {
   display: none;
 }
 
+.pager { overscroll-behavior-x: contain; }
+.page  { overscroll-behavior-y: contain; }
+
 .page {
   flex: 0 0 100vw;
   scroll-snap-align: start;
@@ -254,14 +257,6 @@ button.danger:active {
   transition: transform 180ms ease;
   transform: translateX(0);
   pointer-events: none;
-}
-
-.seg[data-index="1"] .seg__pill{
-  transform: translateX(calc(100% + 6px));
-}
-
-.seg[data-index="2"] .seg__pill{
-  transform: translateX(calc((100% + 6px) * 2));
 }
 
 .seg__btn{

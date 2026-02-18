@@ -240,6 +240,12 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
 
+  // Segmented pill follow (scroll-linked)
+  const segRef = useRef<HTMLDivElement | null>(null);
+  const [segWidth, setSegWidth] = useState(0);
+  const [segProgress, setSegProgress] = useState(0); // 0..2
+  const segRafRef = useRef<number | null>(null);
+
   // iOS Safari 慣性対策：body固定
   const savedScrollYRef = useRef(0);
 
@@ -310,15 +316,34 @@ export default function App() {
     };
   }, []);
 
-  // 横ページスクロールでactiveIndex
+  // Seg width measurement (for pill translation)
+  useEffect(() => {
+    const update = () => setSegWidth(segRef.current?.clientWidth ?? 0);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  // 横ページスクロールでactiveIndex + segProgress
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
 
     const onScroll = () => {
-      const w = el.clientWidth || 1;
-      const idx = Math.round(el.scrollLeft / w);
-      setActiveIndex(Math.max(0, Math.min(2, idx)));
+      if (segRafRef.current) return;
+
+      segRafRef.current = window.requestAnimationFrame(() => {
+        segRafRef.current = null;
+
+        const w = el.clientWidth || 1;
+        const raw = el.scrollLeft / w;
+        const clamped = Math.max(0, Math.min(2, raw));
+
+        setSegProgress(clamped);
+
+        const idx = Math.round(clamped);
+        setActiveIndex(Math.max(0, Math.min(2, idx)));
+      });
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -422,6 +447,14 @@ export default function App() {
     })
   );
 
+  // Segmented pill translate px
+  const segGap = 6;
+  const segPad = 6;
+  const pillW = segWidth > 0 ? (segWidth - segPad * 2 - segGap * 2) / 3 : 0;
+  const pillX = segWidth > 0 ? segProgress * (pillW + segGap) : 0;
+  const pillStyle =
+    segWidth > 0 ? ({ transform: `translateX(${pillX}px)` } as const) : undefined;
+
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -437,8 +470,14 @@ export default function App() {
       <header className="topnav">
         <div className="topnav__title">Seihai</div>
 
-        <div className="seg" data-index={activeIndex} role="tablist" aria-label="Seihai steps">
-          <div className="seg__pill" aria-hidden="true" />
+        <div
+          className="seg"
+          ref={segRef}
+          data-index={activeIndex}
+          role="tablist"
+          aria-label="Seihai steps"
+        >
+          <div className="seg__pill" aria-hidden="true" style={pillStyle} />
           {(["入力", "整理", "行動"] as const).map((label, i) => (
             <button
               key={label}

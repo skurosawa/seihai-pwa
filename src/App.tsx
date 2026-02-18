@@ -67,10 +67,10 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const [dx, setDx] = useState(0);
   const [swiping, setSwiping] = useState(false);
 
-  const ACTION_W = 96;             // Delete領域の幅
-  const OPEN_AT = 28;              // これ以上左なら開く
-  const MAX_LEFT = ACTION_W + 24;  // 引っ張りすぎ防止
-  const INTENT = 10;               // 横スワイプ意図判定（px）
+  const ACTION_W = 96; // Delete領域の幅
+  const OPEN_AT = 28; // これ以上左なら開く
+  const MAX_LEFT = ACTION_W + 24; // 引っ張りすぎ防止
+  const INTENT = 10; // 横スワイプ意図判定（px）
 
   const clamp = (v: number, min: number, max: number) =>
     Math.min(max, Math.max(min, v));
@@ -248,9 +248,51 @@ export default function App() {
 
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // ★ 追加：ドラッグ中フラグ（スクロール抑止に使う）
+  const [isDragging, setIsDragging] = useState(false);
+
   const undoTimerRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
+
+  // ★ 追加：bodyスクロールロック（iOS Safariの慣性対策）
+  const savedScrollYRef = useRef(0);
+
+  const lockScroll = () => {
+    savedScrollYRef.current = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${savedScrollYRef.current}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+  };
+
+  const unlockScroll = () => {
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.width = "";
+    document.body.style.overflow = "";
+    document.body.style.touchAction = "";
+    window.scrollTo(0, savedScrollYRef.current);
+  };
+
+  // ★ 追加：ドラッグ中だけ touchmove を止める（passive:false）
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const prevent = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener("touchmove", prevent, { passive: false });
+    return () => {
+      document.removeEventListener("touchmove", prevent);
+    };
+  }, [isDragging]);
 
   const goToPage = (index: number) => {
     const el = pagerRef.current;
@@ -409,7 +451,8 @@ export default function App() {
         </div>
       </header>
 
-      <div className="pager" ref={pagerRef}>
+      {/* ★ 変更：ドラッグ中は is-dragging クラスを付与してCSSでスクロールを止める */}
+      <div className={`pager ${isDragging ? "is-dragging" : ""}`} ref={pagerRef}>
         {/* ================= Input ================= */}
         <div className="page">
           <h2>入力</h2>
@@ -450,9 +493,26 @@ export default function App() {
           {items.length === 0 ? (
             <p style={{ opacity: 0.6 }}>まだ思考がないにゃ</p>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={() => {
+                setIsDragging(true);
+                lockScroll();
+              }}
+              onDragCancel={() => {
+                setIsDragging(false);
+                unlockScroll();
+              }}
+              onDragEnd={(e) => {
+                setIsDragging(false);
+                unlockScroll();
+                onDragEnd(e);
+              }}
+            >
               <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: "grid", gap: 10 }}>
+                {/* ★ 任意：ここに touchAction:none を足すとさらに強い */}
+                <div style={{ display: "grid", gap: 10, touchAction: "none" }}>
                   {items.map((it) => (
                     <SortableItem
                       key={it.id}

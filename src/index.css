@@ -78,6 +78,18 @@ input, textarea, button {
 }
 
 /* =========================
+   Dragging Lock (iOS Safari)
+   ========================= */
+.pager.is-dragging {
+  overflow-x: hidden;         /* 横ページ遷移を止める */
+  touch-action: none;         /* 余計なジェスチャ抑制 */
+}
+
+.pager.is-dragging .page {
+  overflow-y: hidden;         /* 上下スクロールを止める（主目的） */
+}
+
+/* =========================
    Inputs
    ========================= */
 textarea, input {
@@ -257,5 +269,3 @@ button.danger {
     transition: none;
   }
 }
-
-

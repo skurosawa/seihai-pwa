@@ -281,8 +281,7 @@ button.danger:active {
 }
 
 /* =========================
-   Undo Toast (iOS-like, Seihai palette)
-   - App.tsx側で .toast / .toast--in / .toast--out を使う想定
+   Undo / Share Toast (iOS-like)
    ========================= */
 .toast{
   position: fixed;
@@ -290,7 +289,7 @@ button.danger:active {
   right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 9999;
-  pointer-events: none; /* クリックは中身だけ受ける */
+  pointer-events: none;
 }
 
 .toast__content{
@@ -306,12 +305,11 @@ button.danger:active {
   padding: 12px 14px;
   border-radius: 18px;
 
-  /* iOS風：白半透明＋ブラー＋薄い影 */
   background: rgba(255,255,255,0.86);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 
-  border: 1px solid rgba(195, 216, 240, 0.85); /* Seihai border */
+  border: 1px solid rgba(195, 216, 240, 0.85);
   box-shadow: 0 10px 26px rgba(30, 41, 59, 0.14);
 
   transform: translateY(10px);
@@ -331,7 +329,7 @@ button.danger:active {
 
   background: transparent;
   border: 0;
-  color: #5B86BE;               /* Seihai濃いブルー */
+  color: #5B86BE;
   font-weight: 700;
 
   padding: 8px 10px;
@@ -340,11 +338,10 @@ button.danger:active {
 }
 
 .toast__action:active{
-  background: rgba(167, 199, 231, 0.22); /* --blueの押下 */
+  background: rgba(167, 199, 231, 0.22);
   transform: scale(0.98);
 }
 
-/* in/out animation */
 .toast--in .toast__content{
   animation: toastIn 180ms ease-out forwards;
 }
@@ -364,6 +361,111 @@ button.danger:active {
 }
 
 /* =========================
+   Cards (ActionView)
+   ========================= */
+.card{
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  border: 1px solid rgba(195, 216, 240, 0.90);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(30, 41, 59, 0.10);
+
+  padding: 14px 14px;
+}
+
+.card + .card{
+  margin-top: 12px;
+}
+
+.card__title{
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: rgba(100, 116, 139, 0.95);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.card__main{
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: rgba(30, 41, 59, 0.95);
+}
+
+.card--list .list{
+  display: grid;
+  gap: 8px;
+}
+
+.list__item{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: rgba(232, 242, 253, 0.55);
+  border: 1px solid rgba(195, 216, 240, 0.70);
+}
+
+.list__dot{
+  margin-top: 2px;
+  color: #5B86BE;
+  font-weight: 900;
+}
+
+.list__text{
+  color: rgba(30, 41, 59, 0.92);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* =========================
+   Empty state (ActionView)
+   ========================= */
+.empty{
+  margin-top: 30px;
+  padding: 22px 16px;
+  text-align: center;
+  animation: fadeIn 220ms ease-out both;
+}
+
+.empty__icon{
+  font-size: 28px;
+  margin-bottom: 10px;
+}
+
+.empty__title{
+  font-size: 16px;
+  font-weight: 800;
+  color: rgba(30, 41, 59, 0.90);
+  margin-bottom: 6px;
+}
+
+.empty__text{
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Share button icon */
+.btn__icon{
+  display: inline-block;
+  margin-right: 8px;
+  transform: translateY(-1px);
+  font-weight: 900;
+  opacity: 0.95;
+}
+
+@keyframes fadeIn{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+/* =========================
    Misc
    ========================= */
 .page p {
@@ -374,7 +476,8 @@ button.danger:active {
   button,
   .seg__pill,
   .toast--in .toast__content,
-  .toast--out .toast__content {
+  .toast--out .toast__content,
+  .empty {
     transition: none;
     animation: none;
   }

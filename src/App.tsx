@@ -57,20 +57,16 @@ function loadInitialState(): { draft: string; items: ThoughtItem[] } {
 
 /* =========================
    Swipe Row (iOS-like)
-   - No instant delete
-   - Swipe reveals Delete, tap to confirm
-   - IMPORTANT: Only captures pointer AFTER horizontal intent is detected
-     so long-press reorder can still work on the whole row.
    ========================= */
 function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const start = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const [dx, setDx] = useState(0);
   const [swiping, setSwiping] = useState(false);
 
-  const ACTION_W = 96;             // Delete領域の幅
-  const OPEN_AT = 28;              // これ以上左なら開く
-  const MAX_LEFT = ACTION_W + 24;  // 引っ張りすぎ防止
-  const INTENT = 10;               // 横スワイプ意図判定（px）
+  const ACTION_W = 96;
+  const OPEN_AT = 28;
+  const MAX_LEFT = ACTION_W + 24;
+  const INTENT = 10;
 
   const clamp = (v: number, min: number, max: number) =>
     Math.min(max, Math.max(min, v));
@@ -88,7 +84,6 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    // ここでは capture しない（長押し並び替えを邪魔しない）
     start.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
   };
 
@@ -99,24 +94,18 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
     const deltaX = e.clientX - x;
     const deltaY = e.clientY - y;
 
-    // まだswipeモードじゃないなら、横スワイプ意図を判定
     if (!swiping) {
       const ax = Math.abs(deltaX);
       const ay = Math.abs(deltaY);
 
-      // 横が明確に勝ったら swipe として扱う
       if (ax >= INTENT && ax > ay) {
         setSwiping(true);
-        // swipe開始時点で pointer capture（ここからは削除スワイプが勝つ）
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        // swipe計算は左方向だけ
         setDx(clamp(deltaX, -MAX_LEFT, 0));
       } else {
-        // 並び替え（長押し） or スクロールに任せる
         return;
       }
     } else {
-      // swipe中：横移動でdx更新
       setDx(clamp(deltaX, -MAX_LEFT, 0));
     }
   };
@@ -124,20 +113,17 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const onPointerUp = () => {
     if (!start.current) return;
 
-    // swipeしてないなら何もしない（並び替え/タップに任せる）
     if (!swiping) {
       start.current = null;
       return;
     }
 
-    // iOSっぽく：開く or 閉じる の2択
     if (dx <= -OPEN_AT) open();
     else close();
   };
 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderRadius: 12 }}>
-      {/* 背景（アクション領域） */}
       <div
         style={{
           position: "absolute",
@@ -158,7 +144,6 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
         </button>
       </div>
 
-      {/* 前景（スワイプする行） */}
       <div
         style={{
           transform: `translateX(${dx}px)`,
@@ -172,7 +157,6 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        // 開いてる時にタップで閉じる（iOSっぽい）
         onClick={() => {
           if (!swiping && dx !== 0) close();
         }}
@@ -184,8 +168,7 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
 }
 
 /* =========================
-   Sortable Item (Whole-row long press reorder)
-   - listeners/attributes are applied to the whole row wrapper
+   Sortable Item
    ========================= */
 function SortableItem({
   item,
@@ -205,7 +188,6 @@ function SortableItem({
         transition,
       }}
     >
-      {/* 行全体で長押し→並び替え（iOS寄り） */}
       <div
         {...attributes}
         {...listeners}
@@ -218,7 +200,6 @@ function SortableItem({
         }}
         aria-label="Reorder item"
       >
-        {/* ハンドルは“見た目”として残す（行全体でドラッグできる） */}
         <span
           style={{
             padding: "10px",
@@ -246,16 +227,20 @@ export default function App() {
   const [items, setItems] = useState<ThoughtItem[]>(initialState.items);
 
   const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
-  const [undoVisible, setUndoVisible] = useState(false); // ★追加：トーストのin/out
+  const [undoVisible, setUndoVisible] = useState(false);
 
   const [activeIndex, setActiveIndex] = useState(0);
-
   const [isDragging, setIsDragging] = useState(false);
+
+  // ★追加：共有成功トースト
+  const [shareToast, setShareToast] = useState(false);
+  const shareTimerRef = useRef<number | null>(null);
 
   const undoTimerRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
 
+  // iOS Safari 慣性対策：body固定
   const savedScrollYRef = useRef(0);
 
   const lockScroll = () => {
@@ -280,6 +265,7 @@ export default function App() {
     window.scrollTo(0, savedScrollYRef.current);
   };
 
+  // ドラッグ中は touchmove を止める（passive:false）
   useEffect(() => {
     if (!isDragging) return;
 
@@ -299,6 +285,7 @@ export default function App() {
     el.scrollTo({ left: el.clientWidth * index, behavior: "smooth" });
   };
 
+  // 保存
   useEffect(() => {
     const id = setTimeout(() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ draft, items }));
@@ -307,6 +294,7 @@ export default function App() {
     return () => clearTimeout(id);
   }, [draft, items]);
 
+  // textarea自動高さ
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -314,12 +302,15 @@ export default function App() {
     el.style.height = Math.min(el.scrollHeight, 4 * 24) + "px";
   }, [draft]);
 
+  // タイマー掃除
   useEffect(() => {
     return () => {
       if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+      if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
     };
   }, []);
 
+  // 横ページスクロールでactiveIndex
   useEffect(() => {
     const el = pagerRef.current;
     if (!el) return;
@@ -338,12 +329,10 @@ export default function App() {
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
   const action = useMemo(() => generateAction(thoughts), [thoughts]);
 
-  // ★変更：表示→一定時間後にout→削除（iOSっぽい）
   const showUndo = (payload: { item: ThoughtItem; index: number }) => {
     setUndo(payload);
     setUndoVisible(true);
 
-    // 削除時の軽いフィードバック（効く端末だけ）
     if (navigator.vibrate) navigator.vibrate(20);
 
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -394,6 +383,13 @@ export default function App() {
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  const showShareToast = () => {
+    setShareToast(true);
+    if (navigator.vibrate) navigator.vibrate(15);
+    if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
+    shareTimerRef.current = window.setTimeout(() => setShareToast(false), 2200);
+  };
+
   const onShare = async () => {
     const text = [
       action ? `## 行動\n${action}\n` : "",
@@ -403,6 +399,7 @@ export default function App() {
     try {
       if (navigator.share) {
         await navigator.share({ title: "Seihai", text });
+        showShareToast();
         return;
       }
     } catch {
@@ -410,7 +407,7 @@ export default function App() {
     }
 
     await navigator.clipboard.writeText(text);
-    alert("コピーしたにゃ");
+    showShareToast();
   };
 
   const sensors = useSensors(
@@ -540,7 +537,6 @@ export default function App() {
             </DndContext>
           )}
 
-          {/* ★変更：iOS風ブラー・in/outアニメ（CSS側で .toast を定義する） */}
           {undo && (
             <div
               className={`toast ${undoVisible ? "toast--in" : "toast--out"}`}
@@ -564,16 +560,55 @@ export default function App() {
 
           {action ? (
             <>
-              <p>{action}</p>
+              {/* 行動カード */}
+              <div className="card card--action">
+                <div className="card__title">次の一手</div>
+                <p className="card__main">{action}</p>
+              </div>
 
-              <div className="toolbar">
-                <button className="primary" onClick={onShare}>
-                  共有
+              {/* 整理カード */}
+              {thoughts.length > 0 && (
+                <div className="card card--list">
+                  <div className="card__title">整理</div>
+                  <div className="list">
+                    {thoughts.map((t, i) => (
+                      <div key={`${t}_${i}`} className="list__item">
+                        <span className="list__dot" aria-hidden="true">
+                          •
+                        </span>
+                        <span className="list__text">{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="toolbar" style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button className="primary" onClick={onShare} type="button" aria-label="Share">
+                  <span className="btn__icon" aria-hidden="true">
+                    ↗︎
+                  </span>
+                  共有する
                 </button>
               </div>
             </>
           ) : (
-            <p style={{ opacity: 0.6 }}>まだないにゃ</p>
+            <div className="empty">
+              <div className="empty__icon" aria-hidden="true">
+                🐱💭
+              </div>
+              <div className="empty__title">まだ行動がないにゃ</div>
+              <div className="empty__text">整理に思考を追加すると、次の一手が出るにゃ</div>
+            </div>
+          )}
+
+          {/* 共有成功トースト */}
+          {shareToast && (
+            <div className="toast toast--in" role="status" aria-live="polite">
+              <div className="toast__content">
+                <span className="toast__text">共有したにゃ</span>
+              </div>
+            </div>
           )}
         </div>
       </div>

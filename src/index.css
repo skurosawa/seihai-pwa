@@ -281,6 +281,89 @@ button.danger:active {
 }
 
 /* =========================
+   Undo Toast (iOS-like, Seihai palette)
+   - App.tsx側で .toast / .toast--in / .toast--out を使う想定
+   ========================= */
+.toast{
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 9999;
+  pointer-events: none; /* クリックは中身だけ受ける */
+}
+
+.toast__content{
+  pointer-events: auto;
+  margin: 0 auto;
+  max-width: 520px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 12px 14px;
+  border-radius: 18px;
+
+  /* iOS風：白半透明＋ブラー＋薄い影 */
+  background: rgba(255,255,255,0.86);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  border: 1px solid rgba(195, 216, 240, 0.85); /* Seihai border */
+  box-shadow: 0 10px 26px rgba(30, 41, 59, 0.14);
+
+  transform: translateY(10px);
+  opacity: 0;
+}
+
+.toast__text{
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(30, 41, 59, 0.92);
+}
+
+.toast__action{
+  appearance: none;
+  -webkit-appearance: none;
+
+  background: transparent;
+  border: 0;
+  color: #5B86BE;               /* Seihai濃いブルー */
+  font-weight: 700;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toast__action:active{
+  background: rgba(167, 199, 231, 0.22); /* --blueの押下 */
+  transform: scale(0.98);
+}
+
+/* in/out animation */
+.toast--in .toast__content{
+  animation: toastIn 180ms ease-out forwards;
+}
+
+.toast--out .toast__content{
+  animation: toastOut 160ms ease-in forwards;
+}
+
+@keyframes toastIn{
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut{
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(10px); }
+}
+
+/* =========================
    Misc
    ========================= */
 .page p {
@@ -289,7 +372,10 @@ button.danger:active {
 
 @media (prefers-reduced-motion: reduce) {
   button,
-  .seg__pill {
+  .seg__pill,
+  .toast--in .toast__content,
+  .toast--out .toast__content {
     transition: none;
+    animation: none;
   }
 }

@@ -67,10 +67,10 @@ function SwipeRow({ text, onDelete }: { text: string; onDelete: () => void }) {
   const [dx, setDx] = useState(0);
   const [swiping, setSwiping] = useState(false);
 
-  const ACTION_W = 96; // Delete領域の幅
-  const OPEN_AT = 28; // これ以上左なら開く
-  const MAX_LEFT = ACTION_W + 24; // 引っ張りすぎ防止
-  const INTENT = 10; // 横スワイプ意図判定（px）
+  const ACTION_W = 96;             // Delete領域の幅
+  const OPEN_AT = 28;              // これ以上左なら開く
+  const MAX_LEFT = ACTION_W + 24;  // 引っ張りすぎ防止
+  const INTENT = 10;               // 横スワイプ意図判定（px）
 
   const clamp = (v: number, min: number, max: number) =>
     Math.min(max, Math.max(min, v));
@@ -244,18 +244,18 @@ export default function App() {
   const [initialState] = useState(loadInitialState);
   const [draft, setDraft] = useState(initialState.draft);
   const [items, setItems] = useState<ThoughtItem[]>(initialState.items);
+
   const [undo, setUndo] = useState<{ item: ThoughtItem; index: number } | null>(null);
+  const [undoVisible, setUndoVisible] = useState(false); // ★追加：トーストのin/out
 
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // ★ 追加：ドラッグ中フラグ（スクロール抑止に使う）
   const [isDragging, setIsDragging] = useState(false);
 
   const undoTimerRef = useRef<number | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const pagerRef = useRef<HTMLDivElement | null>(null);
 
-  // ★ 追加：bodyスクロールロック（iOS Safariの慣性対策）
   const savedScrollYRef = useRef(0);
 
   const lockScroll = () => {
@@ -280,7 +280,6 @@ export default function App() {
     window.scrollTo(0, savedScrollYRef.current);
   };
 
-  // ★ 追加：ドラッグ中だけ touchmove を止める（passive:false）
   useEffect(() => {
     if (!isDragging) return;
 
@@ -339,10 +338,19 @@ export default function App() {
   const thoughts = useMemo(() => items.map((x) => x.text), [items]);
   const action = useMemo(() => generateAction(thoughts), [thoughts]);
 
+  // ★変更：表示→一定時間後にout→削除（iOSっぽい）
   const showUndo = (payload: { item: ThoughtItem; index: number }) => {
     setUndo(payload);
+    setUndoVisible(true);
+
+    // 削除時の軽いフィードバック（効く端末だけ）
+    if (navigator.vibrate) navigator.vibrate(20);
+
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    undoTimerRef.current = window.setTimeout(() => setUndo(null), 5000);
+    undoTimerRef.current = window.setTimeout(() => {
+      setUndoVisible(false);
+      window.setTimeout(() => setUndo(null), 200);
+    }, 3800);
   };
 
   const undoDelete = () => {
@@ -355,7 +363,9 @@ export default function App() {
       return next;
     });
 
-    setUndo(null);
+    setUndoVisible(false);
+    window.setTimeout(() => setUndo(null), 200);
+
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
   };
 
@@ -403,10 +413,6 @@ export default function App() {
     alert("コピーしたにゃ");
   };
 
-  /* iOS純正寄せ：
-     - 行全体で「長押し→ドラッグ」できるよう delay を入れる
-     - 横スワイプ（削除）は SwipeRow が横意図を掴んだ時点で勝つ
-  */
   const sensors = useSensors(
     useSensor(TouchSensor, {
       activationConstraint: {
@@ -451,7 +457,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* ★ 変更：ドラッグ中は is-dragging クラスを付与してCSSでスクロールを止める */}
       <div className={`pager ${isDragging ? "is-dragging" : ""}`} ref={pagerRef}>
         {/* ================= Input ================= */}
         <div className="page">
@@ -476,7 +481,7 @@ export default function App() {
               追加
             </button>
 
-            <button onClick={clearDraft} disabled={!draft.trim()}>
+            <button className="outline" onClick={clearDraft} disabled={!draft.trim()}>
               入力をクリア
             </button>
 
@@ -511,7 +516,6 @@ export default function App() {
               }}
             >
               <SortableContext items={items.map((x) => x.id)} strategy={verticalListSortingStrategy}>
-                {/* ★ 任意：ここに touchAction:none を足すとさらに強い */}
                 <div style={{ display: "grid", gap: 10, touchAction: "none" }}>
                   {items.map((it) => (
                     <SortableItem
@@ -536,28 +540,20 @@ export default function App() {
             </DndContext>
           )}
 
+          {/* ★変更：iOS風ブラー・in/outアニメ（CSS側で .toast を定義する） */}
           {undo && (
             <div
-              style={{
-                position: "fixed",
-                left: 12,
-                right: 12,
-                bottom: "calc(12px + env(safe-area-inset-bottom))",
-                padding: "10px 12px",
-                borderRadius: 14,
-                background: "rgba(0,0,0,0.85)",
-                color: "white",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                zIndex: 9999,
-              }}
+              className={`toast ${undoVisible ? "toast--in" : "toast--out"}`}
+              role="status"
+              aria-live="polite"
             >
-              <span style={{ fontSize: 14 }}>削除したにゃ</span>
-              <button className="primary" onClick={undoDelete}>
-                取り消す
-              </button>
+              <div className="toast__content">
+                <span className="toast__text">削除したにゃ</span>
+
+                <button className="toast__action" onClick={undoDelete} type="button">
+                  取り消す
+                </button>
+              </div>
             </div>
           )}
         </div>

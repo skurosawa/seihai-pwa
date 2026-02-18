@@ -7,22 +7,21 @@ html, body, #root {
 }
 
 :root {
-  /* iOS感を残しつつ、アイコン寄りの淡いブルー背景は維持 */
-  --bg: #eef5fa;                 /* 青みのある grouped background */
-  --card: #ffffff;               /* card */
-  --fg: #0f1720;                 /* main label */
-  --muted: rgba(45, 86, 110, 0.60);
-  --border: rgba(45, 86, 110, 0.18);
+  /* アイコン色味に完全マッチ（Seihai Blue） */
+  --bg: #E8F2FD;                 /* 超淡いブルー背景（アイコン背景寄せ） */
+  --card: #FFFFFF;               /* カード・入力エリア */
+  --fg: #1E293B;                 /* 文字（締める） */
+  --muted: #64748B;              /* サブ文字 */
+  --border: #C3D8F0;             /* 薄いボーダー（青寄りグレー） */
 
-  /* iOS純正寄せのアクセント */
-  --ios-blue: #007AFF;
-  --ios-blue-pressed: #0060d4;
-  --ios-red: #FF3B30;
+  --blue: #A7C7E7;               /* アクセント（線色寄せ） */
+  --blue-strong: #7AA0D2;        /* 押下時/主ボタン背景 */
+  --red: #EF4444;                /* 危険色（薄めの赤系） */
 
   --radius: 14px;
-  --shadow: 0 8px 24px rgba(22, 62, 84, 0.08);
+  --shadow: 0 8px 24px rgba(30, 41, 59, 0.08);
 
-  --tap: rgba(22, 62, 84, 0.06);
+  --tap: rgba(167, 199, 231, 0.20); /* 押下の淡い青 */
 }
 
 html {
@@ -76,7 +75,7 @@ input, textarea, button {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: rgba(0,0,0,0.88);
+  color: rgba(30, 41, 59, 0.92);
 }
 
 /* =========================
@@ -93,38 +92,38 @@ input, textarea, button {
 
 /* =========================
    Inputs
-   - iOS Notes / Settings 風に寄せる
+   - iOS Notes / Settings 風 + Seihai Blue
    ========================= */
 textarea, input {
   width: 100%;
   font-size: 16px;
   box-sizing: border-box;
 
-  background: #ffffff;
+  background: var(--card);
   color: var(--fg);
 
-  border: 1px solid #C7C7CC;     /* iOS薄グレー */
+  border: 1px solid var(--border);
   border-radius: 12px;
 
   padding: 16px 12px;
   outline: none;
 
-  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
-  caret-color: var(--ios-blue);
+  box-shadow: 0 1px 4px rgba(30, 41, 59, 0.10);
+  caret-color: #5B86BE; /* Seihai寄せの濃いブルー */
 }
 
 textarea:focus, input:focus {
-  border-color: rgba(0, 122, 255, 0.55);
-  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.18);
+  border-color: rgba(167, 199, 231, 0.95);
+  box-shadow: 0 0 0 4px rgba(167, 199, 231, 0.28);
 }
 
 textarea::placeholder, input::placeholder {
-  color: rgba(60, 60, 67, 0.55);
+  color: var(--muted);
 }
 
 /* =========================
    Buttons
-   - 既存 button は保ちつつ、iOSの階層に寄せる
+   - iOS階層をSeihai Blueで再現
    ========================= */
 button {
   appearance: none;
@@ -132,55 +131,59 @@ button {
 
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(0,0,0,0.90);
+  color: rgba(30, 41, 59, 0.92);
 
   border-radius: 12px;
   padding: 10px 14px;
   font-weight: 600;
 
-  transition: transform 0.04s ease, background 0.15s ease, opacity 0.15s ease;
+  transition: transform 0.04s ease, background 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
 button:active {
   transform: scale(0.98);
+  background: var(--tap);
 }
 
 button:disabled {
   opacity: 0.45;
 }
 
-/* 既存の class を iOS階層へマッピング */
+/* 主ボタン（追加など） */
 button.primary {
-  background: var(--ios-blue);
+  background: var(--blue-strong);
+  border-color: rgba(122, 160, 210, 0.45);
   color: white;
 }
 
 button.primary:active {
-  background: var(--ios-blue-pressed);
+  filter: brightness(0.96);
+  background: var(--blue-strong);
 }
 
-/* “入力をクリア” 用：アウトライン（必要ならこのクラスを付け替えて使う） */
+/* アウトライン（入力をクリア用）
+   ※ App.tsx側で className="outline" を付けると効く */
 button.outline {
   background: transparent;
-  border: 1px solid var(--ios-blue);
-  color: var(--ios-blue);
+  border: 1px solid var(--blue);
+  color: #5B86BE;
 }
 
 button.outline:active {
-  background: rgba(0, 122, 255, 0.10);
+  background: rgba(167, 199, 231, 0.22);
 }
 
-/* 既存 danger を「薄赤背景＋赤文字」に（純正っぽい） */
+/* 危険（リセット用）：薄赤 + 赤文字（iOSっぽい） */
 button.danger {
-  background: rgba(255, 59, 48, 0.12);
-  border: 1px solid rgba(255, 59, 48, 0.18);
-  color: var(--ios-red);
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: var(--red);
 }
 
 button.danger:active {
-  background: rgba(255, 59, 48, 0.18);
+  background: rgba(239, 68, 68, 0.16);
 }
 
 /* =========================
@@ -192,26 +195,26 @@ button.danger:active {
 
   padding: 12px 0;
 
-  background: rgba(250, 250, 250, 0.86);
+  background: rgba(232, 242, 253, 0.82);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 
-  border-top: 1px solid rgba(60, 60, 67, 0.18);
+  border-top: 1px solid rgba(195, 216, 240, 0.80);
 }
 
 /* =========================
    Top Navigation
-   - iOS Large Title + blur
+   - iOS Large Title + blur + Seihai tint
    ========================= */
 .topnav{
   position: sticky;
   top: 0;
   z-index: 50;
   padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-  background: rgba(250, 250, 250, 0.86);
+  background: rgba(232, 242, 253, 0.82);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(60, 60, 67, 0.18);
+  border-bottom: 1px solid rgba(195, 216, 240, 0.80);
 }
 
 .topnav__title{
@@ -223,6 +226,7 @@ button.danger:active {
 
 /* =========================
    Segmented (Sliding Pill)
+   - iOS風を維持しつつSeihai Blueに統一
    ========================= */
 .seg{
   position: relative;
@@ -230,7 +234,7 @@ button.danger:active {
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 6px;
-  border: 1px solid rgba(60, 60, 67, 0.18);
+  border: 1px solid rgba(195, 216, 240, 0.95);
   border-radius: 12px;
   background: rgba(255,255,255,0.70);
   overflow: hidden;
@@ -245,7 +249,7 @@ button.danger:active {
   border-radius: 10px;
   background: #fff;
   box-shadow:
-    0 2px 10px rgba(0,0,0,0.08),
+    0 4px 16px rgba(122, 160, 210, 0.14),
     inset 0 1px 0 rgba(255,255,255,0.7);
   transition: transform 180ms ease;
   transform: translateX(0);
@@ -269,18 +273,18 @@ button.danger:active {
   background: transparent;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: rgba(60, 60, 67, 0.78);
+  color: rgba(100, 116, 139, 0.95);
 }
 
 .seg__btn[aria-selected="true"]{
-  color: rgba(0,0,0,0.92);
+  color: rgba(30, 41, 59, 0.95);
 }
 
 /* =========================
    Misc
    ========================= */
 .page p {
-  color: rgba(60, 60, 67, 0.78);
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
